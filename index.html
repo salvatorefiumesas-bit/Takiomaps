@@ -196,7 +196,7 @@ body.nav .maplibregl-ctrl-top-right{margin-top:120px}
     </div>
 
     <button class="blu" id="chiudiMezzo">Fatto</button>
-    <p class="crediti">Takio Maps · percorsi e traffico TomTom · mappa © OpenStreetMap, © CARTO</p>
+    <p class="crediti">Takio Maps · percorsi e traffico TomTom · mappa © OpenStreetMap</p>
   </div>
 </div>
 
@@ -226,14 +226,23 @@ const mappa = new maplibregl.Map({
   style:{
     version:8,
     sources:{ osm:{ type:"raster", tileSize:256, maxzoom:19,
-      tiles:["https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png"],
-      attribution:"© OpenStreetMap contributors © CARTO" } },
+      tiles:["https://a.tile.openstreetmap.org/{z}/{x}/{y}.png","https://b.tile.openstreetmap.org/{z}/{x}/{y}.png","https://c.tile.openstreetmap.org/{z}/{x}/{y}.png"],
+      attribution:"© OpenStreetMap contributors" } },
     layers:[{ id:"osm", type:"raster", source:"osm" }]
   },
   center:[12.5,42.0], zoom:5, attributionControl:false
 });
 mappa.addControl(new maplibregl.AttributionControl({compact:true}),"top-right");
 mappa.addControl(new maplibregl.NavigationControl({showCompass:false}),"top-right");
+const geoCtrl=new maplibregl.GeolocateControl({
+  positionOptions:{enableHighAccuracy:true,timeout:20000,maximumAge:5000},
+  trackUserLocation:true, showAccuracyCircle:false,
+  fitBoundsOptions:{maxZoom:15}
+});
+mappa.addControl(geoCtrl,"top-right");
+geoCtrl.on("error",e=>stato(erroreGps(e),"errore"));
+// All'apertura prova a centrare la mappa sulla tua posizione
+mappa.on("load",()=>{ try{ geoCtrl.trigger(); }catch(e){} });
 
 let markerA=null, markerB=null, markerGps=null;
 const PIN='<svg viewBox="0 0 24 34" width="28" height="40" aria-hidden="true"><path fill="#ea4335" stroke="#b31412" d="M12 1C6 1 1.5 5.5 1.5 11.3 1.5 19 12 33 12 33s10.5-14 10.5-21.7C22.5 5.5 18 1 12 1z"/><circle cx="12" cy="11.5" r="4" fill="#fff"/></svg>';
@@ -274,13 +283,24 @@ async function geocodifica(testo){
   if(!d.results||!d.results.length) throw new Error("Indirizzo non trovato: "+t);
   return [d.results[0].position.lon, d.results[0].position.lat];
 }
+function erroreGps(e){
+  if(!window.isSecureContext) return "Il GPS funziona solo su connessione HTTPS.";
+  if(e && e.code===1) return "Permesso GPS negato: abilita la posizione per questo sito (icona lucchetto accanto all'indirizzo) e attiva il GPS del telefono.";
+  if(e && e.code===3) return "Posizione non trovata in tempo: esci all'aperto e riprova.";
+  return "Posizione non disponibile: controlla che il GPS del telefono sia attivo.";
+}
 function posizioneAttuale(){
   return new Promise((ok,ko)=>{
-    if(!navigator.geolocation) return ko(new Error("GPS non disponibile"));
-    navigator.geolocation.getCurrentPosition(
-      p=>ok([p.coords.longitude,p.coords.latitude]),
-      ()=>ko(new Error("Permesso GPS negato")),
-      {enableHighAccuracy:true,timeout:15000});
+    if(!navigator.geolocation) return ko(new Error("GPS non disponibile su questo dispositivo."));
+    const va=p=>ok([p.coords.longitude,p.coords.latitude]);
+    navigator.geolocation.getCurrentPosition(va,
+      e1=>{
+        if(e1.code===1) return ko(new Error(erroreGps(e1)));
+        // secondo tentativo con precisione normale (rete/Wi-Fi)
+        navigator.geolocation.getCurrentPosition(va,e2=>ko(new Error(erroreGps(e2))),
+          {enableHighAccuracy:false,timeout:15000,maximumAge:60000});
+      },
+      {enableHighAccuracy:true,timeout:10000,maximumAge:5000});
   });
 }
 
