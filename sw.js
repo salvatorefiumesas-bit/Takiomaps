@@ -3,7 +3,7 @@
    Le richieste a TomTom (percorsi, traffico, indirizzi) e le tessere della mappa
    passano sempre dalla rete e non vengono mai salvate: gli indirizzi delle API contengono la chiave. */
 
-const VERSIONE = "takio-v1";   // cambia questo numero quando modifichi i file dell'app
+const VERSIONE = "takio-v2";   // cambia questo numero quando modifichi i file dell'app
 
 const FILE_APP = [
   "./", "index.html", "manifest.webmanifest", "icon.svg",
@@ -39,7 +39,7 @@ self.addEventListener("fetch", e => {
   if (url.origin === self.location.origin) {
     // File dell'app: prima la rete (così ricevi gli aggiornamenti), se manca il segnale la copia salvata
     e.respondWith(
-      fetch(richiesta).then(risposta => {
+      fetch(richiesta, { cache: "no-cache" }).then(risposta => {
         if (risposta.ok) {
           const copia = risposta.clone();
           caches.open(VERSIONE).then(c => c.put(richiesta, copia));
